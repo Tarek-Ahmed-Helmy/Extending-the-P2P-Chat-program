@@ -3,12 +3,16 @@
     ##  Implementation of registry
     ##  150114822 - Eren Ulaş
 '''
-
+from pymongo import MongoClient
 from socket import *
 import threading
 import select
 import logging
 import db
+import chatroomsdb
+import ast
+
+
 
 # This class is used to process the peer messages sent to registry
 # for each peer connected to registry, a new client thread is created
@@ -85,7 +89,7 @@ class ClientThread(threading.Thread):
                             finally:
                                 self.lock.release()
 
-                            db.user_login(message[1], self.ip, message[3])
+                            db.user_login(message[1], self.ip, message[3], message[4])
                             # login-success is sent to peer,
                             # and a udp server thread is created for this peer, and thread is started
                             # timer thread of the udp server is started
@@ -142,6 +146,68 @@ class ClientThread(threading.Thread):
                         response = "search-user-not-found"
                         logging.info("Send to " + self.ip + ":" + str(self.port) + " -> " + response) 
                         self.tcpClientSocket.send(response.encode())
+
+                elif message[0] == "CREATEROOM" :
+
+                    ChatDB.create_room(message[1])
+                    response="room-created"
+                    logging.info("Send to " + self.ip + ":" + str(self.port) + " -> " + response)
+                    self.tcpClientSocket.send(response.encode())
+
+                elif message[0] == "SHOWROOMS":
+                    response = ChatDB.get_available_rooms()
+                    logging.info("Send to " + self.ip + ":" + str(self.port) + " -> " + str(response))
+                    self.tcpClientSocket.send(str(response).encode())
+
+                elif message[0] == "GETID":
+                    response = ChatDB.get_available_room_ids()
+                    logging.info("Send to " + self.ip + ":" + str(self.port) + " -> " + str(response))
+                    self.tcpClientSocket.send(str(response).encode())
+
+
+                elif message[0] == "CHECKINROOM" :
+                    client = MongoClient('mongodb://localhost:27017/')
+                    ChatDB.join_room(int(message[1]), message[2])
+                    response="join-success"
+                    logging.info("Send to " + self.ip + ":" + str(self.port) + " -> " + response)
+                    self.tcpClientSocket.send(response.encode())
+
+                elif message[0] == "ROOM_USERS":
+                    response = ChatDB.get_users_in_room(int(message[1]))
+                    logging.info("Send to " + self.ip + ":" + str(self.port) + " -> " + str(response))
+                    self.tcpClientSocket.send(str(response).encode())
+
+                elif message[0] == "ONLINE_USER?":
+                    response = db.is_account_online(message[1])
+                    logging.info("Send to " + self.ip + ":" + str(self.port) + " -> " + str(response))
+                    self.tcpClientSocket.send(str(response).encode())
+
+                elif message[0] == "ip&UDP_PORT":
+                    response = db.get_peer_ip_udp_port(message[1])
+                    logging.info("Send to " + self.ip + ":" + str(self.port) + " -> " + str(response))
+                    self.tcpClientSocket.send(str(response).encode())
+
+                elif message[0] == "show_USER_ROOMS":
+                    response = ChatDB.get_rooms_for_user(message[1])
+                    logging.info("Send to " + self.ip + ":" + str(self.port) + " -> " + str(response))
+                    self.tcpClientSocket.send(str(response).encode())
+
+                elif message[0] == "user_in_room?":
+                    response = ChatDB.is_user_in_room( int(message[1]) , message[2] )
+                    logging.info("Send to " + self.ip + ":" + str(self.port) + " -> " + str(response))
+                    self.tcpClientSocket.send(str(response).encode())
+
+                elif message[0] == "LEAVEROOM":
+                    ChatDB.user_leave_room(int(message[1]), message[2])
+                    response="Leaving room successfully.."
+                    logging.info("Send to " + self.ip + ":" + str(self.port) + " -> " + response)
+                    self.tcpClientSocket.send(response.encode())
+
+
+
+
+
+
             except OSError as oErr:
                 logging.error("OSError: {0}".format(oErr)) 
 
@@ -178,7 +244,7 @@ class UDPServer(threading.Thread):
     # resets the timer for udp server
     def resetTimer(self):
         self.timer.cancel()
-        self.timer = threading.Timer(3, self.waitHelloMessage)
+        self.timer = threading.Timer(23, self.waitHelloMessage)
         self.timer.start()
 
 
@@ -188,15 +254,17 @@ port = 15600
 portUDP = 15500
 
 # db initialization
+
+ChatDB = chatroomsdb.ChatroomsDB()
 db = db.DB()
 
 # gets the ip address of this peer
 # first checks to get it for windows devices
 # if the device that runs this application is not windows
 # it checks to get it for macos devices
-hostname=gethostname()
+hostname = gethostname()
 try:
-    host=gethostbyname(hostname)
+    host = gethostbyname(hostname)
 except gaierror:
     import netifaces as ni
     host = ni.ifaddresses('en0')[ni.AF_INET][0]['addr']
