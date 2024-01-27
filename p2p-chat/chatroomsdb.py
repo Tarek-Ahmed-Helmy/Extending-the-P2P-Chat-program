@@ -1,5 +1,6 @@
 from pymongo import MongoClient
 
+
 class ChatroomsDB:
     def __init__(self):
         self.client = MongoClient('mongodb://localhost:27017/')
@@ -60,7 +61,6 @@ class ChatroomsDB:
         room_ids = [room['Room_id'] for room in rooms]
         return room_ids
 
-
     def get_users_in_room(self, room_id):
         query = {'Room_id': room_id}
         projection = {'users.username': 1, '_id': 0}
@@ -76,18 +76,3 @@ class ChatroomsDB:
         query = {'users.username': username}
         projection = {'Room_id': 1, 'Room_Name': 1, '_id': 0}
         return list(self.rooms_collection.find(query, projection))
-
-
-
-"""
-TEMP = ChatroomsDB()
-print(TEMP.get_rooms_for_user("mostafa"))
-print(TEMP.create_room("mostafa"))
-print(TEMP.is_user_in_room(1, "me"))
-TEMP.join_room(1, "me")
-print(TEMP.is_user_in_room(1, "me"))
-print(TEMP.get_available_rooms())
-print(TEMP.get_users_in_room(1))
-TEMP.join_room(1, "H")
-print(TEMP.get_users_in_room(1))
-"""
